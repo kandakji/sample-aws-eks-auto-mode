@@ -163,7 +163,7 @@ EKS Auto Mode automates persistent storage setup with Amazon EBS:
 📱 [Running GPU Workloads](examples/gpu/)
 - ML/AI model deployment
 - GPU-accelerated computing
-- Example: DeepSeek model inference
+- Example: Qwen 3 model inference
 
 ### Neuron Applications
 🎤 [Running Neuron Workloads](examples/neuron/)

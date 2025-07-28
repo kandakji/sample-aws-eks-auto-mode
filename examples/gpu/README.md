@@ -25,7 +25,7 @@
 - Scalable GPU resources
 - EKS Auto Mode integration
 
-This example demonstrates deploying a GenAI model (DeepSeek-R1-Distill-Qwen-32B) on EKS Auto Mode.
+This example demonstrates deploying a GenAI model ([Qwen 3 32b fp8](https://huggingface.co/Qwen/Qwen3-32B-FP8)) on EKS Auto Mode.
 
 > ⚠️ **Prerequisites**: 
 > - You must have a Hugging Face account with an access token!
@@ -35,7 +35,7 @@ This example demonstrates deploying a GenAI model (DeepSeek-R1-Distill-Qwen-32B)
 This example showcases GPU-accelerated workloads on EKS Auto Mode using the following components:
 
 ### 🖥️ Instance Types
-- **Default**: G5 instances (optimized for ML workloads)
+- **Default**: G5, G6 or G6e instances (optimized for ML workloads)
 - **Customization**: Available in [gpu-nodepool.yaml.tpl](../../nodepool-templates/gpu-nodepool.yaml.tpl)
 
 ### 🔧 Key Components
@@ -44,7 +44,7 @@ This example showcases GPU-accelerated workloads on EKS Auto Mode using the foll
 - Network Load Balancer for external access
 
 🧠 **AI Components**
-- Hugging Face model deployment (DeepSeek-R1)
+- Hugging Face model deployment ([Qwen 3 32b fp8](https://huggingface.co/Qwen/Qwen3-32B-FP8))
 - Interactive Web UI for model interaction
 
 ## Implementation Steps
@@ -92,15 +92,17 @@ kubectl apply -f namespace.yaml
 ```bash
 # Replace <your_actual_hugging_face_token> with your token
 kubectl create secret generic hf-secret \
-  --from-literal=hf_api_token=<your_actual_hugging_face_token> \
-  -n vllm-inference
+  -n vllm-inference \
+  --from-literal=hf_api_token=<your_actual_hugging_face_token>
 ```
 
 ### 5. Deploy Model and UI
 
 1. **Deploy the Model**:
+Following command will deploy Qwen3 32b (fp8). We also have another manifest file that allows you to deploy [Deepseek](vllm-deepseek-gpu.yaml) instead.
+
 ```bash
-kubectl apply -f vllm-deepseek-gpu.yaml
+kubectl apply -f model-qwen3-32b-fp8.yaml
 ```
 
 > ✅ The model deployment includes the required toleration to run on GPU nodes:
@@ -191,7 +193,7 @@ First, remove the application components and node pool:
 # Remove application components
 kubectl delete -f lb-service.yaml
 kubectl delete -f open-webui.yaml
-kubectl delete -f vllm-deepseek-gpu.yaml
+kubectl delete -f model-qwen3-32b-fp8.yaml
 kubectl delete -f namespace.yaml
 
 # Remove GPU node pool
@@ -225,7 +227,7 @@ terraform destroy --auto-approve
 2. **Model Initialization**
    - Check pod logs for startup errors:
      ```bash
-     kubectl logs -n vllm-inference deployment/vllm-deepseek
+     kubectl logs -n vllm-inference deployment/qwen3-32b-fp8
      ```
    - Verify Hugging Face token is valid
 

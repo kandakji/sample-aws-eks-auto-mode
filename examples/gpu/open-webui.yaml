@@ -19,7 +19,7 @@ spec:
       automountServiceAccountToken: false
       containers:
       - name: open-webui
-        image: kopi/openwebui@sha256:38a883697e6ee80a0cf2505e7a90c9f24d1ddf6dc8c6edc9bc58cbb729a64f2f
+        image: ghcr.io/open-webui/open-webui
         imagePullPolicy: Always
         securityContext:
             allowPrivilegeEscalation: false
@@ -41,5 +41,5 @@ spec:
         - name: OPENAI_API_KEY
           value: "xxx"
         - name: OPENAI_API_BASE_URLS
-          value: "http://vllm-service/v1;http://vllm-service-karsh/v1"
+          value: "http://vllm-service:8000/v1"
 
