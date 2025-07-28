@@ -58,7 +58,21 @@ terraform apply -auto-approve
 $(terraform output -raw configure_kubectl)
 ```
 
-#### 2. Deploy the Sample Application
+#### 2. Install Metrics Server
+The HPA requires the Metrics Server to collect resource metrics from pods:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+```
+
+> 📘 **Note**: The Metrics Server collects resource metrics from kubelets and exposes them through the Kubernetes API. It may take a minute or two to become ready.
+
+Verify the Metrics Server is running:
+```bash
+kubectl get pods -n kube-system | grep metrics-server
+```
+
+#### 3. Deploy the Sample Application
 Deploy a PHP Apache server that will serve as our scaling target:
 
 ```bash
@@ -73,7 +87,7 @@ kubectl apply -f php-apache.yaml
 > - **Container**: `registry.k8s.io/hpa-example` - a simple PHP server
 > - **Service**: Exposes the application on port 80
 
-#### 3. Create the HorizontalPodAutoscaler
+#### 4. Create the HorizontalPodAutoscaler
 Create an HPA that maintains between 1 and 10 replicas based on CPU utilization:
 
 ```bash
@@ -86,7 +100,7 @@ Alternatively, you can use the declarative approach:
 kubectl apply -f hpa.yaml
 ```
 
-#### 4. Verify HPA Status
+#### 5. Verify HPA Status
 Check the current status of the HPA:
 
 ```bash
@@ -101,7 +115,7 @@ php-apache   Deployment/php-apache/scale   0% / 50%  1         10        1      
 
 > 📘 **Note**: The current CPU consumption shows 0% because there's no load on the server yet.
 
-#### 5. Generate Load to Trigger Scaling
+#### 6. Generate Load to Trigger Scaling
 Start a load generator to increase CPU utilization:
 
 ```bash
@@ -109,7 +123,7 @@ Start a load generator to increase CPU utilization:
 kubectl run -i --tty load-generator --rm --image=busybox:1.28 --restart=Never -- /bin/sh -c "while sleep 0.01; do wget -q -O- http://php-apache; done"
 ```
 
-#### 6. Watch the Scaling in Action
+#### 7. Watch the Scaling in Action
 In another terminal, monitor the HPA scaling behavior:
 
 ```bash
@@ -123,10 +137,10 @@ NAME         REFERENCE                     TARGET      MINPODS   MAXPODS   REPLI
 php-apache   Deployment/php-apache/scale   305% / 50%  1         10        1          3m
 ```
 
-Then observe the replica count increase:
+Then observe the replica count increase (will stabilize between 6-8):
 ```
 NAME         REFERENCE                     TARGET      MINPODS   MAXPODS   REPLICAS   AGE
-php-apache   Deployment/php-apache/scale   305% / 50%  1         10        7          3m
+php-apache   Deployment/php-apache/scale   305% / 50%  1         10        8          3m
 ```
 
 Verify the deployment scaling:
@@ -137,10 +151,10 @@ kubectl get deployment php-apache
 Expected output:
 ```
 NAME         READY   UP-TO-DATE   AVAILABLE   AGE
-php-apache   7/7     7            7           19m
+php-apache   8/8     8            8           19m
 ```
 
-#### 7. Stop Load Generation and Observe Scale-Down
+#### 8. Stop Load Generation and Observe Scale-Down
 Stop the load generator by pressing `Ctrl+C` in the load generator terminal.
 
 Monitor the scale-down process:
@@ -163,6 +177,8 @@ php-apache   Deployment/php-apache/scale   0% / 50%     1         10        1   
 Remove the HPA resources:
 
 ```bash
+kubectl delete pod load-generator
+
 # Remove the HPA
 kubectl delete hpa php-apache
 
