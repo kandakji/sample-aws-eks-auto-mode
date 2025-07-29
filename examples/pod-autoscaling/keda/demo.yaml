@@ -65,7 +65,7 @@ spec:
   triggers:
   - type: aws-sqs-queue
     metadata:
-      queueURL: https://sqs.us-west-2.amazonaws.com/381881593997/automode-cluster-keda
+      queueURL: ""
       queueLength: "1"
       awsRegion: us-west-2
       identityOwner: operator
