@@ -195,3 +195,65 @@ kubectl delete -f php-apache.yaml
 > - Setting up SQS-based scaling for GPU workloads
 > - Event-driven autoscaling with custom metrics
 > - Integration with Karpenter for node-level scaling
+
+### Quick Setup (Basic Steps)
+
+```bash
+# 1. Deploy AWS resources and generate manifests
+cd terraform
+terraform init
+terraform apply -auto-approve
+
+# 2. Apply Kubernetes manifests (go back to keda directory)
+cd ..
+kubectl apply -f namespace.yaml
+kubectl apply -f keda-service-account.yaml
+kubectl apply -f sqs-reader-service-account.yaml
+
+# 3. Install KEDA with Helm
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+helm install keda kedacore/keda --namespace keda --version 2.17.0 --values keda-helm-values.yaml
+
+# 4. Deploy the model application with SQS consumer
+kubectl apply -f ../../../nodepools/gpu-nodepool.yaml
+kubectl apply -f vllm-qwen3/namespace.yaml
+kubectl apply -f vllm-qwen3/model-qwen3-4b-fp8-with-sqs.yaml
+
+# 5. Deploy the ScaledObject for autoscaling
+kubectl apply -f scaledObject.yaml
+
+# 6. (Optional) Generate test prompts to trigger scaling
+kubectl apply -f prompt-generator-job.yaml
+```
+
+Check how many messages in queue:
+```bash
+cd terraform
+QUEUE_URL=$(terraform output -raw sqs_url)
+aws sqs get-queue-attributes --queue-url $QUEUE_URL --attribute-names ApproximateNumberOfMessages
+```
+
+### KEDA Cleanup
+
+To clean up the KEDA autoscaling components:
+
+```bash
+# 1. Remove Kubernetes resources
+kubectl delete job prompt-generator -n keda --ignore-not-found
+kubectl delete -f scaledObject.yaml --ignore-not-found
+kubectl delete -f vllm-qwen3/model-qwen3-4b-fp8-with-sqs.yaml --ignore-not-found
+
+# 2. Uninstall KEDA
+helm uninstall keda -n keda
+
+# 3. Remove service accounts and namespace resources
+kubectl delete -f sqs-reader-service-account.yaml --ignore-not-found
+kubectl delete -f keda-service-account.yaml --ignore-not-found
+kubectl delete namespace keda --ignore-not-found
+kubectl delete namespace vllm --ignore-not-found
+
+# 4. Destroy AWS resources (SQS, IAM roles)
+cd terraform
+terraform destroy -auto-approve
+```
