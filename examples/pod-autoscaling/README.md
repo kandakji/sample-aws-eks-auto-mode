@@ -190,70 +190,272 @@ kubectl delete -f php-apache.yaml
 
 ## Part 2: KEDA Event-Driven Autoscaling
 
-> 🚧 **Coming Soon**: The KEDA section will demonstrate:
-> - Installing KEDA on EKS Auto Mode
-> - Setting up SQS-based scaling for GPU workloads
-> - Event-driven autoscaling with custom metrics
-> - Integration with Karpenter for node-level scaling
+### KEDA Architecture
+[KEDA (Kubernetes Event-Driven Autoscaling)](https://keda.sh/) extends Kubernetes with event-driven autoscaling capabilities beyond traditional CPU/memory metrics. Key benefits include:
 
-### Quick Setup (Basic Steps)
+🎯 **Event-Driven Scaling**
+- Scale based on external metrics (SQS queue depth, Kafka lag, etc.)
+- Support for 60+ scalers including AWS services
+- Zero-to-N and N-to-zero scaling capabilities
+
+🚀 **Advanced Capabilities**
+- Custom metrics from external systems
+- Integration with Horizontal Pod Autoscaler
+- Seamless integration with Karpenter for node-level scaling
+
+⚡ **Perfect for Modern Workloads**
+- Batch processing jobs
+- Event-driven microservices
+- AI/ML inference workloads
+- Queue-based processing systems
+
+This example demonstrates KEDA scaling a GPU-based AI model inference workload based on Amazon SQS queue depth.
+
+**How it works**:
+1. 📨 **Message Queue**: SQS receives inference requests
+2. 📊 **KEDA Monitoring**: ScaledObject monitors queue depth
+3. 🔄 **Scaling Decision**: KEDA scales pods based on queue metrics
+4. 🤖 **GPU Processing**: Scaled pods process inference requests
+5. 📉 **Scale Down**: Pods scale to zero when queue is empty
+
+**Key Components**:
+- **KEDA Controller**: Manages event-driven scaling
+- **ScaledObject**: Defines scaling behavior and triggers
+- **SQS Queue**: Message queue for inference requests
+- **GPU Inference Pods**: AI model serving containers
+- **Karpenter Integration**: Automatic node provisioning for GPU workloads
+
+### KEDA Implementation Steps
+
+> ⚠️ **Prerequisites**: 
+> - **GPU Instance Availability**: Ensure you have sufficient GPU quota for your AWS account
+> - **Helm**: Required for KEDA installation
+
+#### 1. Setup AWS Infrastructure
+Deploy the required AWS resources (SQS queue, IAM roles) using Terraform:
 
 ```bash
-# 1. Deploy AWS resources and generate manifests
-cd terraform
+# Navigate to KEDA terraform directory (assuming you're in HPA folder)
+cd ../keda/terraform
+
+# Initialize and deploy AWS resources
 terraform init
 terraform apply -auto-approve
+```
 
-# 2. Apply Kubernetes manifests (go back to keda directory)
+> 📦 **AWS Resources Created**:
+> - **SQS Queue**: For inference request messages
+> - **IAM Roles**: Service accounts for KEDA and SQS access
+> - **IAM Policies**: Permissions for queue operations
+
+#### 2. Configure Kubernetes Resources
+Set up the necessary namespaces and service accounts:
+
+```bash
+# Navigate back to KEDA directory
 cd ..
+
+# Create namespaces and service accounts
 kubectl apply -f namespace.yaml
 kubectl apply -f keda-service-account.yaml
+kubectl apply -f vllm-qwen3/namespace.yaml
 kubectl apply -f sqs-reader-service-account.yaml
+```
 
-# 3. Install KEDA with Helm
+> ✅ **Service Account Details**: 
+> - **KEDA Service Account**: Allows KEDA to read SQS metrics
+> - **SQS Reader Service Account**: Enables pods to consume SQS messages
+> - **IAM Role Annotations**: Links Kubernetes service accounts to AWS IAM roles
+
+#### 3. Install KEDA with Helm
+Deploy KEDA controller with custom configuration:
+
+```bash
+# Add KEDA Helm repository
 helm repo add kedacore https://kedacore.github.io/charts
 helm repo update
-helm install keda kedacore/keda --namespace keda --version 2.17.0 --values keda-helm-values.yaml
 
-# 4. Deploy the model application with SQS consumer
+# Install KEDA with custom values
+helm install keda kedacore/keda \
+  --namespace keda \
+  --version 2.17.0 \
+  --values keda-helm-values.yaml
+```
+
+Verify KEDA installation:
+```bash
+kubectl get pods -n keda
+```
+
+Expected output:
+```
+NAME                                      READY   STATUS    RESTARTS   AGE
+keda-admission-webhooks-xxx               1/1     Running   0          2m
+keda-operator-xxx                         1/1     Running   0          2m
+keda-operator-metrics-apiserver-xxx       1/1     Running   0          2m
+```
+
+> 📘 **KEDA Components**:
+> - **Operator**: Main KEDA controller managing ScaledObjects
+> - **Metrics API Server**: Exposes custom metrics to HPA
+> - **Admission Webhooks**: Validates KEDA resource configurations
+
+#### 4. Deploy GPU NodePool
+Ensure GPU nodes are available for the AI workload:
+
+```bash
+# Deploy GPU-enabled NodePool
 kubectl apply -f ../../../nodepools/gpu-nodepool.yaml
-kubectl apply -f vllm-qwen3/namespace.yaml
+```
+
+> ⚠️ **GPU Node Configuration**: The NodePool includes:
+> - **Instance Types**: G5, G6, or G6e instances optimized for ML workloads
+> - **Taints**: `nvidia.com/gpu=true:NoSchedule` to ensure only GPU workloads are scheduled
+> - **Labels**: Proper GPU node identification for workload placement
+
+#### 5. Deploy AI Model with SQS Consumer
+Deploy the GPU-based inference workload that will be scaled by KEDA:
+
+```bash
 kubectl apply -f vllm-qwen3/model-qwen3-4b-fp8-with-sqs.yaml
+```
 
-# 5. Deploy the ScaledObject for autoscaling
+> 🤖 **Model Details**:
+> - **Model**: Qwen3-4B-FP8 optimized for GPU inference
+> - **SQS Integration**: Built-in consumer for processing queue messages
+> - **GPU Tolerations**: Configured to run on GPU-tainted nodes
+> - **Resource Requests**: Optimized for efficient GPU utilization
+
+Verify the deployment:
+```bash
+kubectl get pods -n vllm
+kubectl get deployments -n vllm
+```
+
+Initially, you should see 0 replicas since there are no messages in the queue.
+
+#### 6. Deploy KEDA ScaledObject
+Create the ScaledObject that defines the scaling behavior:
+
+```bash
 kubectl apply -f scaledObject.yaml
+```
 
-# 6. (Optional) Generate test prompts to trigger scaling
+> 📊 **Scaling Configuration**:
+> - **Trigger**: SQS queue depth
+> - **Target**: 5 messages per pod
+> - **Min Replicas**: 0 (scale to zero when idle)
+> - **Max Replicas**: 10 (adjust based on your needs)
+> - **Cooldown**: Prevents rapid scaling oscillations
+
+Verify the ScaledObject:
+```bash
+kubectl get scaledobject -n vllm
+```
+
+Expected output:
+```
+NAME                    SCALETARGETKIND      SCALETARGETNAME              MIN   MAX   TRIGGERS   AUTHENTICATION   READY   ACTIVE   FALLBACK   AGE
+qwen3-4b-fp8-scaler     apps/v1.Deployment   qwen3-4b-fp8-with-sqs        0     10    aws-sqs                     True    False    False      30s
+```
+
+#### 7. Test the Scaling Behavior
+Generate test messages to trigger scaling:
+
+```bash
+# Deploy job that generates 50 inference requests
 kubectl apply -f prompt-generator-job.yaml
 ```
 
-Check how many messages in queue:
+> 🧪 **Test Scenario**: The prompt generator creates 50 sample inference requests in the SQS queue, simulating real-world load.
+
+#### 8. Monitor the Scaling Process
+Watch the scaling behavior in real-time:
+
+1. **Check SQS Queue Depth**:
 ```bash
 cd terraform
 QUEUE_URL=$(terraform output -raw sqs_url)
-aws sqs get-queue-attributes --queue-url $QUEUE_URL --attribute-names ApproximateNumberOfMessages
+aws sqs get-queue-attributes \
+  --queue-url $QUEUE_URL \
+  --attribute-names ApproximateNumberOfMessages
 ```
+
+2. **Monitor ScaledObject Status**:
+```bash
+kubectl describe scaledobject qwen3-4b-fp8-scaler -n vllm
+```
+
+3. **Watch Deployment Scaling**:
+```bash
+kubectl get deployment qwen3-4b-fp8-with-sqs -n vllm --watch
+```
+
+4. **Monitor Pod Creation**:
+```bash
+kubectl get pods -n vllm --watch
+```
+
+> ⏱️ **Expected Timeline**:
+> - **0-1 min**: Messages appear in SQS queue (50 messages)
+> - **1-2 min**: KEDA detects queue depth and triggers scaling
+> - **2-5 min**: GPU nodes provision and pods start (model download begins)
+> - **5-6 min**: Pods become ready and start consuming messages
+> - **6-7 min**: All messages processed, queue becomes empty
+> - **7-8 min**: Pods scale down to zero after cooldown period
+
+#### 10. Observe the Processing
+Monitor the actual inference processing:
+
+1. **Check Pod Logs** (model initialization):
+```bash
+kubectl logs -n vllm deployment/qwen3-4b-fp8-with-sqs -f
+```
+
+2. **Monitor Message Processing**:
+```bash
+# Watch queue depth decrease as messages are processed
+watch "aws sqs get-queue-attributes --queue-url $QUEUE_URL --attribute-names ApproximateNumberOfMessages"
+```
+
+> 🎯 **Success Indicators**:
+> - Queue depth increases to 50, then decreases to 0
+> - Deployment scales from 0 to multiple replicas, then back to 0
+> - Pod logs show model loading and inference processing
+> - Processing completes within expected timeframe
 
 ### KEDA Cleanup
 
-To clean up the KEDA autoscaling components:
+🧹 Follow these steps to clean up all KEDA resources:
 
+#### 1. Remove Application Resources
 ```bash
-# 1. Remove Kubernetes resources
+# Remove test job and scaling resources
 kubectl delete job prompt-generator -n keda --ignore-not-found
 kubectl delete -f scaledObject.yaml --ignore-not-found
 kubectl delete -f vllm-qwen3/model-qwen3-4b-fp8-with-sqs.yaml --ignore-not-found
+```
 
-# 2. Uninstall KEDA
+#### 2. Uninstall KEDA
+```bash
+# Remove KEDA Helm installation
 helm uninstall keda -n keda
+```
 
-# 3. Remove service accounts and namespace resources
+#### 3. Remove Kubernetes Resources
+```bash
+# Clean up service accounts and namespaces
 kubectl delete -f sqs-reader-service-account.yaml --ignore-not-found
 kubectl delete -f keda-service-account.yaml --ignore-not-found
 kubectl delete namespace keda --ignore-not-found
 kubectl delete namespace vllm --ignore-not-found
+```
 
-# 4. Destroy AWS resources (SQS, IAM roles)
+#### 4. Destroy AWS Infrastructure
+```bash
+# Remove AWS resources (SQS, IAM roles)
 cd terraform
 terraform destroy -auto-approve
 ```
+
+> ⚠️ **Warning**: This will remove all AWS resources created for the KEDA demo, including the SQS queue and IAM roles.
