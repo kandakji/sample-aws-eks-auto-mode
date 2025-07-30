@@ -171,6 +171,13 @@ EKS Auto Mode automates persistent storage setup with Amazon EBS:
 - Cost-effective acceleration
 - Example: Whisper speech recognition
 
+### Pod Autoscaling
+📊 [Pod Autoscaling with HPA and KEDA](examples/pod-autoscaling/)
+- Horizontal Pod Autoscaler (HPA) basics
+- CPU-based autoscaling with PHP Apache server
+- KEDA for event-driven autoscaling
+- SQS queue-based GPU workload scaling
+
 ## Cleanup
 
 🧹 Follow these steps to remove all resources:
