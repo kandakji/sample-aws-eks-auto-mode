@@ -355,8 +355,8 @@ kubectl get scaledobject -n vllm
 
 Expected output:
 ```
-NAME                    SCALETARGETKIND      SCALETARGETNAME              MIN   MAX   TRIGGERS   AUTHENTICATION   READY   ACTIVE   FALLBACK   AGE
-qwen3-4b-fp8-scaler     apps/v1.Deployment   qwen3-4b-fp8-with-sqs        0     10    aws-sqs                     True    False    False      30s
+NAME                        SCALETARGETKIND      SCALETARGETNAME      MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED    TRIGGERS        AUTHENTICATIONS   AGE
+model-qwen3-4b-fp8-scaler   apps/v1.Deployment   model-qwen3-4b-fp8   0     10    True    False    Unknown    Unknown   aws-sqs-queue                     6s
 ```
 
 #### 7. Test the Scaling Behavior
@@ -373,6 +373,8 @@ kubectl apply -f prompt-generator-job.yaml
 Watch the scaling behavior in real-time:
 
 1. **Check SQS Queue Depth**:
+Wait for job to finish sending messages first. 
+
 ```bash
 cd terraform
 QUEUE_URL=$(terraform output -raw sqs_url)
@@ -383,12 +385,12 @@ aws sqs get-queue-attributes \
 
 2. **Monitor ScaledObject Status**:
 ```bash
-kubectl describe scaledobject qwen3-4b-fp8-scaler -n vllm
+kubectl describe scaledobject model-qwen3-4b-fp8-scaler -n vllm
 ```
 
 3. **Watch Deployment Scaling**:
 ```bash
-kubectl get deployment qwen3-4b-fp8-with-sqs -n vllm --watch
+kubectl get deployment model-qwen3-4b-fp8 -n vllm --watch
 ```
 
 4. **Monitor Pod Creation**:
@@ -409,7 +411,7 @@ Monitor the actual inference processing:
 
 1. **Check Pod Logs** (model initialization):
 ```bash
-kubectl logs -n vllm deployment/qwen3-4b-fp8-with-sqs -f
+kubectl logs -n vllm deployment/model-qwen3-4b-fp8 -f
 ```
 
 2. **Monitor Message Processing**:
