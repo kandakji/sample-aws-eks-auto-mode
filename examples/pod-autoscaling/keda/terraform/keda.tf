@@ -68,7 +68,7 @@ module "irsa_sqs_reader" {
   oidc_providers = {
     main = {
       provider_arn               = data.terraform_remote_state.main.outputs.oidc_provider_arn
-      namespace_service_accounts = ["keda:sqs-reader-sa","keda:keda-operator","vllm:sqs-reader-sa"]
+      namespace_service_accounts = ["keda:sqs-reader-sa","vllm:sqs-reader-sa"]
     }
   }
   role_policy_arns = { main = aws_iam_policy.sqs_reader.arn }
