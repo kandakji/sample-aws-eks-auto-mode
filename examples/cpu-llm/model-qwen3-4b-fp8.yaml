@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen3-4b-fp8
+  namespace: vllm-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qwen3-4b-fp8
+  template:
+    metadata:
+      labels:
+        app: qwen3-4b-fp8
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      nodeSelector:
+        eks.amazonaws.com/instance-family: r7i
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - NET_RAW
+            seccompProfile:
+              type: RuntimeDefault
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - "ollama serve & sleep 30 && ollama pull qwen3:4b-instruct-2507-q8_0 && wait"
+          ports:
+            - name: http
+              containerPort: 11434
+          resources:
+            requests:
+              cpu: 4
+              memory: 8Gi
+            limits:
+              cpu: 4
+              memory: 8Gi
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+      tolerations:
+        - key: cpu-llm
+          value: "true"
+          effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-cpu-service
+  namespace: vllm-inference
+spec:
+  selector:
+    app: qwen3-4b-fp8
+  ports:
+    - name: http
+      port: 11434

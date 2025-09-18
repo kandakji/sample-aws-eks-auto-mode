@@ -35,3 +35,11 @@ resource "local_file" "setup_neuron" {
   })
   filename = "${path.module}/../nodepools/neuron-nodepool.yaml"
 }
+
+resource "local_file" "setup_cpu_llm" {
+  content = templatefile("${path.module}/../nodepool-templates/cpu-llm-nodepool.yaml.tpl", {
+    node_iam_role_name  = module.eks.node_iam_role_name
+    cluster_name = module.eks.cluster_name
+  })
+  filename = "${path.module}/../nodepools/cpu-llm-nodepool.yaml"
+}
