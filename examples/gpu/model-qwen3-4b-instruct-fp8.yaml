@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: qwen3-32b-fp8
+  name: qwen3-4b-instruct-fp8
   namespace: vllm-inference
 spec:
-  replicas: 1
+  replicas: 1  # Start with 1 replica, KEDA will manage scaling
   selector:
     matchLabels:
-      app: qwen3-32b-fp8
+      app: qwen3-4b-instruct-fp8
   template:
     metadata:
       labels:
-        app: qwen3-32b-fp8
+        app: qwen3-4b-instruct-fp8
     spec:
       securityContext:
         seccompProfile:
@@ -32,29 +32,31 @@ spec:
               type: RuntimeDefault
           command: ["vllm", "serve"]
           args:
-            - Qwen/Qwen3-32B-FP8
-            - --served-model-name=qwen3-32b-fp8
+            - Qwen/Qwen3-4B-Instruct-2507-FP8
+            - --served-model-name=qwen3-4b-instruct-fp8
             - --trust-remote-code
-            # - --gpu-memory-utilization=0.90
             - --gpu-memory-utilization=0.95
-            - --max-model-len=32768 # 32K
-            # - --max-model-len=16384 # 16K
+            - --max-model-len=32768
             - --disable-log-requests
-            # Qwen3 specific
             - --enable-auto-tool-choice
             - --tool-call-parser=hermes
             - --reasoning-parser=qwen3
           ports:
             - name: http
               containerPort: 8000
+            - name: metrics
+              containerPort: 8001
+          env:
+            - name: VLLM_PROMETHEUS_PORT
+              value: "8001"
           resources:
             requests:
-              cpu: 3.6 #90%
-              memory: 29Gi #90%
+              cpu: 3.6
+              memory: 29Gi
               nvidia.com/gpu: 1
             limits:
-              cpu: 3.6 #90%
-              memory: 29Gi #90%
+              cpu: 3.6
+              memory: 29Gi
               nvidia.com/gpu: 1
           volumeMounts:
           - mountPath: /dev/shm
@@ -79,9 +81,15 @@ kind: Service
 metadata:
   name: vllm-service
   namespace: vllm-inference
+  labels:
+    app: qwen3-4b-instruct-fp8
 spec:
   selector:
-    app: qwen3-32b-fp8
+    app: qwen3-4b-instruct-fp8
   ports:
     - name: http
       port: 8000
+      targetPort: 8000
+    - name: metrics
+      port: 8000
+      targetPort: 8000

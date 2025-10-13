@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vllm-scaledobject
+  namespace: vllm-inference
+spec:
+  scaleTargetRef:
+    name: qwen3-4b-instruct-fp8
+  minReplicaCount: 1
+  maxReplicaCount: 2
+  pollingInterval: 15
+  cooldownPeriod: 30
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc:9090
+        metricName: vllm_gpu_cache_usage_perc
+        query: sum({__name__=~"vllm:gpu_cache_usage_perc"})
+        threshold: '0.1'

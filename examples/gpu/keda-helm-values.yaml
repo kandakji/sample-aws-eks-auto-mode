@@ -1,0 +1,105 @@
+replicaCount: 1
+
+image:
+  keda:
+    repository: ghcr.io/kedacore/keda
+    tag: 2.17.0
+  metricsApiServer:
+    repository: ghcr.io/kedacore/keda-metrics-apiserver
+    tag: 2.17.0
+  webhooks:
+    repository: ghcr.io/kedacore/keda-admission-webhooks
+    tag: 2.17.0
+
+crds:
+  install: true
+
+watchNamespace: ""
+
+operator:
+  name: keda-operator
+  replicaCount: 1
+
+metricsServer:
+  replicaCount: 1
+
+webhooks:
+  enabled: true
+  replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: keda-operator
+  annotations:
+    eks.amazonaws.com/role-arn: ""
+
+podSecurityContext:
+  operator:
+    runAsNonRoot: true
+    runAsUser: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  metricsServer:
+    runAsNonRoot: true
+    runAsUser: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  webhooks:
+    runAsNonRoot: true
+    runAsUser: 1001
+    seccompProfile:
+      type: RuntimeDefault
+
+securityContext:
+  operator:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+  metricsServer:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+  webhooks:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+
+resources:
+  operator:
+    limits:
+      cpu: 1000m
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  metricsServer:
+    limits:
+      cpu: 1000m
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  webhooks:
+    limits:
+      cpu: 50m
+      memory: 100Mi
+    requests:
+      cpu: 10m
+      memory: 10Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+logging:
+  operator:
+    level: info
+    format: console
+  metricServer:
+    level: 0

@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-generator
+  namespace: vllm-inference
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: generator
+        image: curlimages/curl:8.5.0
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "Starting load generation..."
+            # Send sustained load for 2 minutes
+            end_time=$(($(date +%s) + 120))
+            count=0
+            
+            while [ $(date +%s) -lt $end_time ]; do
+              for i in $(seq 1 20); do
+                curl -X POST "http://vllm-service:8000/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                    "model": "qwen3-4b-instruct-fp8",
+                    "prompt": "Write a detailed technical analysis of machine learning algorithms including neural networks, transformers, and their applications in natural language processing. Explain the mathematical foundations and provide examples.",
+                    "max_tokens": 800,
+                    "temperature": 0.7
+                  }' > /dev/null 2>&1 &
+                count=$((count + 1))
+              done
+              echo "Sent batch (total: $count requests)"
+              sleep 3
+            done
+            
+            echo "Load generation completed! Total: $count requests"
+            wait
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
