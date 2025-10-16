@@ -20,8 +20,8 @@ spec:
       nodeSelector:
         eks.amazonaws.com/instance-family: r7i
       containers:
-        - name: ollama
-          image: ollama/ollama:latest
+        - name: vllm
+          image: public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -30,20 +30,24 @@ spec:
                 - NET_RAW
             seccompProfile:
               type: RuntimeDefault
-          command: ["/bin/sh"]
+          command: ["vllm", "serve"]
           args:
-            - -c
-            - "ollama serve & sleep 30 && ollama pull qwen3:4b-instruct-2507-q8_0 && wait"
+            - unsloth/Llama-3.2-3B-Instruct
+            - --served-model-name=Llama-3.2-3B-Instruct
+            - --max-model-len=32768
           ports:
             - name: http
-              containerPort: 11434
+              containerPort: 8000
+          env:
+            - name: VLLM_LOGGING_LEVEL
+              value: "DEBUG"
           resources:
             requests:
-              cpu: 4
-              memory: 8Gi
+              cpu: 8
+              memory: 16Gi
             limits:
-              cpu: 4
-              memory: 8Gi
+              cpu: 8
+              memory: 16Gi
           volumeMounts:
           - mountPath: /dev/shm
             name: dshm
@@ -66,4 +70,4 @@ spec:
     app: qwen3-4b-fp8
   ports:
     - name: http
-      port: 11434
+      port: 8000
