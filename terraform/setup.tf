@@ -43,3 +43,11 @@ resource "local_file" "setup_cpu_llm" {
   })
   filename = "${path.module}/../nodepools/cpu-llm-nodepool.yaml"
 }
+
+resource "local_file" "setup_p5" {
+  content = templatefile("${path.module}/../nodepool-templates/p5-nodepool.yaml.tpl", {
+    node_iam_role_name  = module.eks.node_iam_role_name
+    cluster_name = module.eks.cluster_name
+  })
+  filename = "${path.module}/../nodepools/p5-nodepool.yaml"
+}
