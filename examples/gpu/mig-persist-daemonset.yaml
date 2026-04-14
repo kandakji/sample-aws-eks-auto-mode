@@ -1,0 +1,97 @@
+---
+# DaemonSet to automatically configure MIG on p5 nodes at startup
+# This ensures MIG configuration survives spot interruptions
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mig-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mig-configurator
+  namespace: mig-system
+spec:
+  selector:
+    matchLabels:
+      app: mig-configurator
+  template:
+    metadata:
+      labels:
+        app: mig-configurator
+    spec:
+      hostPID: true
+      hostNetwork: true
+      nodeSelector:
+        eks.amazonaws.com/instance-family: "p5"
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      initContainers:
+      - name: configure-mig
+        image: nvidia/cuda:12.3.0-base-ubuntu22.04
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+
+          # Check if already configured
+          if [ -f /host-var/mig-configured ]; then
+            echo "MIG already configured on this node"
+            exit 0
+          fi
+
+          echo "Configuring MIG on all 8 H100 GPUs..."
+
+          # Enable MIG mode only if not already enabled
+          for i in {0..7}; do
+            mode=$(nsenter -t 1 -m -u -n -i nvidia-smi -i $i --query-gpu=mig.mode.current --format=csv,noheader | tr -d '[:space:]')
+            if [[ "$mode" != "Enabled" ]]; then
+              echo "Enabling MIG on GPU $i..."
+              nsenter -t 1 -m -u -n -i nvidia-smi -i $i -mig 1 || true
+            else
+              echo "MIG already enabled on GPU $i"
+            fi
+          done
+
+          sleep 5
+
+          # Configure 3x 2g.20gb per GPU = 24 total MIG devices
+          for i in {0..7}; do
+            # Check if MIG instances already exist
+            if nsenter -t 1 -m -u -n -i nvidia-smi mig -i $i -lgi 2>&1 | grep -q "No GPU instances found"; then
+              echo "Creating MIG instances on GPU $i..."
+              nsenter -t 1 -m -u -n -i nvidia-smi mig -i $i -dci 2>/dev/null || true
+              nsenter -t 1 -m -u -n -i nvidia-smi mig -i $i -dgi 2>/dev/null || true
+              nsenter -t 1 -m -u -n -i nvidia-smi mig -i $i -cgi 14,14,14 -C
+            else
+              echo "MIG instances already exist on GPU $i"
+            fi
+          done
+
+          # Mark as configured
+          touch /host-var/mig-configured
+          echo "MIG configuration complete - 24 MIG devices created"
+          nsenter -t 1 -m -u -n -i nvidia-smi -L
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-var
+          mountPath: /host-var
+      containers:
+      - name: pause
+        image: public.ecr.aws/docker/library/busybox:latest
+        command: ["sleep", "infinity"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      volumes:
+      - name: host-var
+        hostPath:
+          path: /var

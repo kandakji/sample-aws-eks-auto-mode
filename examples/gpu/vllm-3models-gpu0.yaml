@@ -1,0 +1,305 @@
+---
+# Deploy 3 different 8B models on the 3 MIG slices of GPU 0
+# Each MIG device has ~20GB memory, perfect for 7-8B models in FP8
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vllm-multi
+---
+# Model 1: Qwen3-8B on MIG slice 0 of GPU 0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen3-8b
+  namespace: vllm-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-qwen3-8b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen3-8b
+        model: qwen3-8b
+    spec:
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      nodeSelector:
+        eks.amazonaws.com/instance-family: "p5"
+      containers:
+      - name: vllm-qwen3-8b
+        image: vllm/vllm-openai:latest
+        command: ["vllm"]
+        args:
+          - "serve"
+          - "Qwen/Qwen3-8B-FP8"
+          - "--dtype"
+          - "auto"
+          - "--tensor-parallel-size"
+          - "1"
+          - "--gpu-memory-utilization"
+          - "0.90"
+          - "--max-model-len"
+          - "4096"
+          - "--port"
+          - "8000"
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Use MIG UUID for GPU 0, slice 0
+        - name: CUDA_VISIBLE_DEVICES
+          value: "MIG-1ab04f24-22f2-5086-b687-3fe8ffc65406"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
+              optional: true
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "4"
+            memory: "16Gi"
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "8"
+            memory: "24Gi"
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 10
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "4Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen3-8b
+  namespace: vllm-multi
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+---
+# Model 2: Qwen2.5-7B-Instruct on MIG slice 1 of GPU 0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen-7b
+  namespace: vllm-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-qwen-7b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen-7b
+        model: qwen-7b
+    spec:
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      nodeSelector:
+        eks.amazonaws.com/instance-family: "p5"
+      containers:
+      - name: vllm-qwen-7b
+        image: vllm/vllm-openai:latest
+        command: ["vllm"]
+        args:
+          - "serve"
+          - "Qwen/Qwen2.5-7B-Instruct"
+          - "--quantization"
+          - "fp8"
+          - "--dtype"
+          - "auto"
+          - "--tensor-parallel-size"
+          - "1"
+          - "--gpu-memory-utilization"
+          - "0.90"
+          - "--max-model-len"
+          - "8192"
+          - "--port"
+          - "8000"
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Use MIG UUID for GPU 0, slice 1
+        - name: CUDA_VISIBLE_DEVICES
+          value: "MIG-b5151a45-e274-5bfe-ba01-ba77bed5c1bb"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
+              optional: true
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "4"
+            memory: "16Gi"
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "8"
+            memory: "24Gi"
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 10
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "4Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen-7b
+  namespace: vllm-multi
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen-7b
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+---
+# Model 3: Mistral-7B-Instruct on MIG slice 2 of GPU 0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-mistral-7b
+  namespace: vllm-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-mistral-7b
+  template:
+    metadata:
+      labels:
+        app: vllm-mistral-7b
+        model: mistral-7b
+    spec:
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      nodeSelector:
+        eks.amazonaws.com/instance-family: "p5"
+      containers:
+      - name: vllm-mistral-7b
+        image: vllm/vllm-openai:latest
+        command: ["vllm"]
+        args:
+          - "serve"
+          - "mistralai/Mistral-7B-Instruct-v0.3"
+          - "--quantization"
+          - "fp8"
+          - "--dtype"
+          - "auto"
+          - "--tensor-parallel-size"
+          - "1"
+          - "--gpu-memory-utilization"
+          - "0.90"
+          - "--max-model-len"
+          - "8192"
+          - "--port"
+          - "8000"
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Use MIG UUID for GPU 0, slice 2
+        - name: CUDA_VISIBLE_DEVICES
+          value: "MIG-5920c616-a689-5f0d-a845-881b336dfe04"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: huggingface-token
+              key: token
+              optional: true
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "4"
+            memory: "16Gi"
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "8"
+            memory: "24Gi"
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 10
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "4Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-mistral-7b
+  namespace: vllm-multi
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-mistral-7b
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000

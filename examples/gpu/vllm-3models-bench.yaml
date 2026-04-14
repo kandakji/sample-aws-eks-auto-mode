@@ -1,0 +1,133 @@
+---
+# Benchmark deployments for the 3 models running on GPU 0 MIG slices
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-bench-qwen3-8b
+  namespace: vllm-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-bench-qwen3-8b
+  template:
+    metadata:
+      labels:
+        app: vllm-bench-qwen3-8b
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: vllm-bench-qwen3-8b
+        image: vllm/vllm-openai:latest
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            while true; do
+              echo 'Starting vLLM benchmark for Qwen3-8B...';
+              vllm bench serve \
+                --base-url http://vllm-qwen3-8b:8000 \
+                --backend vllm \
+                --model Qwen/Qwen3-8B-FP8 \
+                --endpoint /v1/completions \
+                --num-prompts 256 \
+                --max-concurrency 1,4,8,16,32 \
+                --random-input-len 512 \
+                --random-output-len 128;
+              echo 'Benchmark complete. Waiting 60s before next run...';
+              sleep 60;
+            done
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-bench-qwen-7b
+  namespace: vllm-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-bench-qwen-7b
+  template:
+    metadata:
+      labels:
+        app: vllm-bench-qwen-7b
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: vllm-bench-qwen-7b
+        image: vllm/vllm-openai:latest
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            while true; do
+              echo 'Starting vLLM benchmark for Qwen2.5-7B...';
+              vllm bench serve \
+                --base-url http://vllm-qwen-7b:8000 \
+                --backend vllm \
+                --model Qwen/Qwen2.5-7B-Instruct \
+                --endpoint /v1/completions \
+                --num-prompts 256 \
+                --max-concurrency 1,4,8,16,32 \
+                --random-input-len 1024 \
+                --random-output-len 256;
+              echo 'Benchmark complete. Waiting 60s before next run...';
+              sleep 60;
+            done
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-bench-mistral-7b
+  namespace: vllm-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-bench-mistral-7b
+  template:
+    metadata:
+      labels:
+        app: vllm-bench-mistral-7b
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: vllm-bench-mistral-7b
+        image: vllm/vllm-openai:latest
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            while true; do
+              echo 'Starting vLLM benchmark for Mistral-7B...';
+              vllm bench serve \
+                --base-url http://vllm-mistral-7b:8000 \
+                --backend vllm \
+                --model mistralai/Mistral-7B-Instruct-v0.3 \
+                --endpoint /v1/completions \
+                --num-prompts 256 \
+                --max-concurrency 1,4,8,16,32 \
+                --random-input-len 1024 \
+                --random-output-len 256;
+              echo 'Benchmark complete. Waiting 60s before next run...';
+              sleep 60;
+            done
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
